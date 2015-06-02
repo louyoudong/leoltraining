@@ -1,0 +1,194 @@
+<?php
+
+/**
+ * Implements hook_menu().
+ */
+
+function leol_init(){
+  //drupal_add_css(,"css/Homepage.css");
+  //var_dump(drupal_get_path('module', 'leol'));die();
+  drupal_add_css(drupal_get_path('module', 'leol').'/css/Homepage.css', array('group' => CSS_THEME));
+}
+
+
+function leol_menu() {
+  $items['leol/form'] = array(
+    'title' => 'leol_form',
+    'description' => 'leol training form',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('leol_training_form'),
+    'access arguments' => array('access content'),
+	  'weight' => '-30',
+	  'expanded' => TRUE,
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['leol/search/book'] = array(
+	 	'title' => 'leol_search_book_form',
+	 	'description' => 'leol search book form',
+	 	'page callback' => 'drupal_get_form',
+	 	'page arguments' => array('leol_search_book_form'),
+	 	'access arguments' => array('access content'),
+	  'type' => MENU_NORMAL_ITEM,
+	);
+
+  return $items;
+}
+
+/**
+ * Create a form with 2 fields and submit button.
+ */
+function leol_training_form($form, $form_state) {
+  if (isset($form_state['storage']['page_two'])) {
+    return leol_training_form_page_two();
+  }
+  $form['username'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Username'),
+	  '#size' => 30,
+    '#required' => TRUE,
+  );
+	
+  $form['password'] = array(
+    '#type' => 'password',
+    '#title' => t('Password'),
+    '#required' => TRUE,
+  );
+	
+  $form['next'] = array(
+    '#type' => 'submit',
+    '#value' => 'Next>>',
+  );
+  
+  return $form;
+}
+
+function leol_training_form_page_two() {
+  $form['age'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Age'),
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => 'Submit',
+  );
+  return $form;
+}
+/**
+ * Check whether the password is correct (just check if the length is above 8).
+ */
+ 
+function leol_training_form_validate($form, $form_state) {
+  if (isset($form_state['storage']['page_two'])){
+    $password = $form_state['storage']['page_one_values']['password'];
+  }
+  else {
+    $password = $form_state['values']['password'];
+  }
+  $password_length = strlen($password);
+  if ($password_length < 8){
+    form_set_error('password',t('Invalid Password.'));
+  }
+}
+
+/**
+ * Submit the form and save the value into the variable table.
+ */
+ 
+function leol_training_form_submit($form, &$form_state) {
+  if ($form_state['clicked_button']['#id'] == 'edit-next') {
+    $form_state['storage']['page_two'] = TRUE;
+    $form_state['storage']['page_one_values'] = $form_state['values'];
+    $form_state["rebuild"] = TRUE;
+  }
+  else {
+    variable_set('username', $form_state['storage']['page_one_values']['username']);
+    variable_set('password', $form_state['storage']['page_one_values']['password']);
+	variable_set('age', $form_state['values']['age']);
+    drupal_set_message(t('Success'));
+	unset ($form_state['storage']);
+	}
+}
+
+/**
+ * Implements hook_block_info().
+ */
+/** 
+function leol_block_info() {
+  $blocks['leol_block_form'] = array(
+    'info' => t('Leol Block Form'),
+    'cache' => DRUPAL_NO_CACHE,
+  );
+  return $blocks;
+}
+*/
+
+/**
+ * Implements hook_block_view().
+ */
+/** 
+function leol_block_view($delta = '') {
+  $block = array();
+  switch ($delta) {
+    case 'leol_block_form' :
+	  $block['subject'] = t('Leol Block Form Subject');
+	  $block['content'] = drupal_get_form('leol_training_form');
+	  break;
+  }
+  
+  return $block;
+}
+*/
+
+function leol_node_submit($node, $form, &$form_state) {
+  if ($node->type == 'page') {
+    $content = $node->body['und'][0]['value'];
+	if (strstr($content, '[blog_url]')) {
+	  $content = str_replace('[blog_url]', 'www.baidu.com', $content);
+	  $node->body['und'][0]['value'] = $content;
+	}
+  }
+}
+
+function leol_search_book_form($form, $form_state) {
+	$form['bookname'] = array(
+	 '#type' => 'textfield',
+	 '#title' => t('Bookname'),
+	 '#size' => 30,
+	 '#required' => TRUE,
+	);
+	$form['submit'] = array(
+	 '#type' => 'submit',
+	 '#value' => 'Submit',
+	);
+	return $form;
+}
+
+/**
+ * @param $form
+ * @param $form_state
+ */
+function leol_search_book_form_submit($form, &$form_state) {
+	if (isset($form['bookname']['#value'])){
+		$query = new EntityFieldQuery();
+
+
+		$entities = $query->entityCondition('entity_type', 'node')
+		 ->propertyCondition('type', 'Book')
+		 ->propertyCondition('title', $form['bookname']['#value'])
+		 ->propertyCondition('status', 1)
+		 ->range(0,1)
+		 ->execute();
+
+		if (!empty($entities['node'])) {
+			$array = array_keys($entities['node']);
+			$node = node_load(array_shift($array));
+			$title = $node->title;
+			$nid = $node->nid;
+			$url = 'node/'.$nid;
+			drupal_goto($url);
+		}else{
+			drupal_set_message("No Result!",'error');
+		}
+	}
+}
+?>

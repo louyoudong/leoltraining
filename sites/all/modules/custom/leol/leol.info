@@ -1,0 +1,10 @@
+;$Id$
+name = Leol
+description = A Leo training module.
+package = Drupal 7 Development
+core = 7.x
+files[] = leol.module
+
+;dependencies[] = autoload
+;php = 5.4
+

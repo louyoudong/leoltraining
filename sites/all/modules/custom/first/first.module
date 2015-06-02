@@ -1,0 +1,48 @@
+<?php
+// $Id$
+
+/**
+ * Implements hook_help().
+ */
+function first_help($path,$arg){
+  if ($path == 'admin/help#first') {
+    $value = array ('@a' => 'module',
+					'!b' => 'http://example.com',
+					'%c' => 'test');
+    return t('A demonstration @a. !b. %c', $value);
+    }
+}
+
+/**
+ * Implements hook_block_info().
+ */
+function first_block_info(){
+  $blocks = array();
+  
+  $blocks['list_modules'] = array(
+    'info' => t('A listing of all of the enabled modules.'),
+	'cache' => DRUPAL_NO_CACHE,
+	);
+	
+  return $blocks;
+}
+
+/**
+ * Implements hook_block_view().
+ */
+function first_block_view($block_name = '') {
+//$block_counter = &drupal_static(_FUNCTION_, array());
+  //var_dump($block_counter);
+  if ($block_name == 'list_modules') {
+    $list = module_list();
+	//var_dump($list);
+    $theme_args = array('items' => $list, 'type' => 'ol');
+    $content = theme('item_list', $theme_args);
+	//var_dump($content);
+    $block = array(
+      'subject' => t('Enabled Modules'),
+      'content' => $content,
+    );
+    return $block;
+  }
+}

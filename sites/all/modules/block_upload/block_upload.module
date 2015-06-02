@@ -1,0 +1,290 @@
+<?php
+
+/**
+ * hook_perm
+ * Set block upload access permission
+ * @return type 
+ */
+function block_upload_permission() {
+  return array(
+    'block upload' => array(
+      'title' => t('Block upload'), 
+      'description' => t('Upload files through the block.'),
+    ),
+  );
+}
+
+function block_upload_menu() {
+  $items['admin/config/content/block_upload'] = array(
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('block_upload_settings_form'),
+    'title' => 'Block Upload settings',
+    'access arguments' => array('administer site'),
+    'file' => 'block_upload.admin.inc',
+  );
+  return $items;
+}
+
+function block_upload_block_info() {
+  $blocks_count = variable_get('block_upload_blocks_count', 1);
+  for ($i = 1; $i <= $blocks_count; $i++) {
+    $blocks['block_upload_' . $i] = array(
+      'info' => t('Block Upload') . ' ' . $i, 
+  );
+  }
+  return $blocks;
+}
+
+function block_upload_block_configure($delta = '') {
+  $form = array();
+  $blocks_count = variable_get('block_upload_blocks_count', 1);
+  for ($i = 1; $i <= $blocks_count; $i++) {
+    if ($delta == 'block_upload_' . $i) {
+    $fields = block_upload_get_field_list();
+      $form['block_upload_' . $i . '_field'] = array(
+      '#type' => 'select',
+      '#title' => t('Field'),
+      '#description' => t('Select field you wish to upload file.'),
+      '#options' => $fields,
+        '#default_value' => array(variable_get('block_upload_' . $i . '_field', '')),
+    );
+    if (module_exists('plupload')) {
+        $form['block_upload_' . $i . '_plupload_status'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Use Plupoad for file uploads'),
+          '#default_value' => variable_get('block_upload_' . $i . '_plupload_status', 0),
+      );
+    }
+    else {
+      $form['block_upload_plupload_status'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Use Plupoad for file uploads'),
+        '#disabled' => TRUE,
+        '#description' => t('To enable multiuploads and drag&drop upload features, download and install !link module', array('!link' => l('Plupload integration', 'http://drupal.org/project/plupload', array('external' => TRUE, 'attributes' => array('target' => '_blank'))))),
+      );
+    }
+  }
+  }
+  return $form;
+}
+
+function block_upload_block_save($delta = '', $edit = array()) {
+  $blocks_count = variable_get('block_upload_blocks_count', 1);
+  for ($i = 1; $i <= $blocks_count; $i++) {
+    if ($delta == 'block_upload_' . $i) {
+      variable_set('block_upload_' . $i . '_field', $edit['block_upload_' . $i . '_field']);
+      if (isset($edit['block_upload_' . $i . '_plupload_status'])) {
+        variable_set('block_upload_' . $i . '_plupload_status', $edit['block_upload_' . $i . '_plupload_status']);
+      }
+  }
+}
+}
+
+function block_upload_block_view($delta = '') {
+  $block = array();
+  $blocks_count = variable_get('block_upload_blocks_count', 1);
+  for ($i = 1; $i <= $blocks_count; $i++) {
+    if ($delta == 'block_upload_' . $i) {
+    if (user_access('block upload') && $node = menu_get_object()) {
+        $field = field_info_field(variable_get('block_upload_' . $i . '_field', ''));
+      foreach ($field['bundles']['node'] as $bundle) {
+        if ($bundle == $node->type) {
+            if (variable_get('block_upload_' . $i . '_plupload_status', 0)) {
+              $block['content'] = drupal_get_form('block_upload_plupload_from', $node, $i); //Plupload integration form
+          }
+          else {
+              $block['content'] = drupal_get_form('block_upload_form', $node, $i); //Simple file upload form
+          }
+        }
+      }
+    }
+  }
+  }
+  return $block;
+}
+
+/**
+ * Block upload form.
+ * @param type $form_state
+ * @return type 
+ */
+function block_upload_form($form, &$form_state, $node, $buid) {
+  $form['block_upload_file'] = array(
+    '#type' => 'file',
+  );
+  $form['block_upload_nid'] = array(
+    '#type' => 'textfield', 
+    '#access' => FALSE,
+    '#value' => $node->nid,
+  );
+  $form['block_upload_node_type'] = array(
+    '#type' => 'textfield', 
+    '#access' => FALSE,
+    '#value' => $node->type,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Upload'),
+  );
+  $form_state['buid'] = $buid;
+  return $form;
+}
+
+/**
+ * Validate and save uploaded file.
+ * @param type $form
+ * @param type $form_state 
+ */
+function block_upload_form_validate($form, &$form_state) {
+  $values = $form_state['values'];
+  $buid = $form_state['buid'];
+  $field_name = variable_get('block_upload_' . $buid . '_field', '');
+  $field = field_info_instance('node', $field_name, $values['block_upload_node_type']);
+  
+  //Get file directory to upload
+  $destination = block_upload_get_upload_destination($field);
+  
+  //Get validators
+  $validators = block_upload_get_validators($field_name, $field);
+
+  //Save file
+  if ($file = file_save_upload('block_upload_file', $validators, $destination)) {
+    $file->status = FILE_STATUS_PERMANENT;
+    if ($field['widget']['module'] == 'file') {
+      $file->display = 1;
+    }
+    $file = file_save($file);
+    $form_state['storage']['file'] = $file;
+  }
+}
+
+/**
+ * Save uploaded file to node
+ * @param type $form
+ * @param type $form_state 
+ */
+function block_upload_form_submit($form, &$form_state) {
+  $file = $form_state['storage']['file'];
+  $values = $form_state['values'];
+  $nid = $values['block_upload_nid'];
+  $buid = $form_state['buid'];
+  $field = variable_get('block_upload_' . $buid . '_field', '');
+  $node = node_load($nid);
+  $node->{$field}[LANGUAGE_NONE][] = (array)$file;
+  node_save($node);
+  unset($form_state['storage']['file']);
+  drupal_set_message(t('File was successfully uploaded!'));
+}
+
+/**
+ * Returns avaliable field list of filefield type.
+ * @return type 
+ */
+function block_upload_get_field_list() {
+  foreach (field_info_fields() as $key => $item) {
+    //Display only file type fields
+    if ($item['type'] == 'image' || $item['type'] == 'file') {
+      $fields[$key] = $item['field_name'];
+    }
+  }
+  return $fields;
+}
+
+/**
+ * Returns destinaton for file upload.
+ * @global type $user
+ * @param type $field
+ * @return string 
+ */
+function block_upload_get_upload_destination($field) {
+  if ($destination = $field['settings']['file_directory']) {
+    if (module_exists('token')) {
+      $node = menu_get_object();
+      $destination = token_replace($destination, array('node' => $node));
+    }
+  }
+  $destination = 'public://' . $destination;
+  file_prepare_directory($destination, FILE_CREATE_DIRECTORY);
+  return $destination;
+}
+
+/**
+ * Returns validators array
+ * @param type $field_name
+ * @param type $field
+ * @return array
+ */
+function block_upload_get_validators($field_name, $field) {
+  $validators = file_field_widget_upload_validators($field_name, $field);
+  if ($field['widget']['module'] == 'image') {
+    $validators['file_validate_is_image'] = array();
+    $validators['file_validate_image_resolution'] = array($field['settings']['max_resolution'], $field['settings']['min_resolution']);
+  }
+  return $validators;
+}
+
+
+/**
+ * Plupload form
+ * @param type $form
+ * @param array $form_state
+ * @param type $node
+ * @return type 
+ */
+function block_upload_plupload_from($form, &$form_state, $node, $buid) {
+  $field_name = variable_get('block_upload_' . $buid . '_field', '');
+  $field = field_info_instance('node', $field_name, $node->type);
+  $validators = block_upload_get_validators($field_name, $field);
+  
+  unset($validators['file_validate_is_image']);
+  $form['block_upload_file'] = array(
+    '#type' => 'plupload',
+    '#upload_validators' => $validators,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Upload'),
+  );
+  $form_state['node'] = $node;
+  $form_state['field'] = $field;
+  $form_state['buid'] = $buid;
+  return $form;
+}
+
+/**
+ * Save uploads
+ * Example taken from plupload_test_submit();
+ * @param type $form
+ * @param type $form_state 
+ */
+function block_upload_plupload_from_submit($form, &$form_state) {
+  $field = $form_state['field'];
+  $path = block_upload_get_upload_destination($field);
+  // We can't use file_save_upload() because of http://www.jacobsingh.name/content/tight-coupling-no-not
+  //file_uri_to_object();
+  $buid = $form_state['buid'];
+  $field_name = variable_get('block_upload_' . $buid . '_field', '');
+  $node = node_load($form_state['node']->nid);
+  foreach ($form_state['values']['block_upload_file'] as $uploaded_file) {
+    if ($uploaded_file['status'] == 'done') {
+      $source = $uploaded_file['tmppath'];
+      $destination = file_stream_wrapper_uri_normalize($path . '/' . $uploaded_file['name']);
+      // Rename it to its original name, and put it in its final home.
+      // Note - not using file_move here because if we call file_get_mime
+      // (in file_uri_to_object) while it has a .tmp extension, it horks.
+      $destination = file_unmanaged_move($source, $destination, FILE_EXISTS_RENAME);
+      $file = plupload_file_uri_to_object($destination);
+      if ($field['widget']['module'] == 'file') {
+        $file->display = 1;
+      }
+      file_save($file);
+      $node->{$field_name}[LANGUAGE_NONE][] = (array)$file;
+      drupal_set_message(t('File @name was successfully uploaded!', array('@name' => $uploaded_file['name'])));
+    }
+    else {
+      // @todo: move this to element validate or something and clean up t().
+      form_set_error('block_upload_file', "Upload of {$uploaded_file['name']} failed");
+    }
+  }
+  node_save($node);
+}

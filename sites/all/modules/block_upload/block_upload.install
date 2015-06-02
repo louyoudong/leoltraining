@@ -1,0 +1,17 @@
+<?php
+
+/**
+* Move first block settings to multiple block structure.
+* Don't forget to select block visibility settings manually.
+*/
+function block_upload_update_6100() {
+  //Move field name
+  $block_field = variable_get('block_upload_field', '');
+  variable_set('block_upload_1_field', $block_field);
+  variable_del('block_upload_field');
+  
+  //Move plupload setting
+  $plupload_status = variable_get('block_upload_plupload_status', 0);
+  variable_set('block_upload_1_plupload_status', $plupload_status);
+  variable_del('block_upload_plupload_status');
+}

@@ -1,0 +1,8 @@
+.view-homepage-promoted-books .view-content .views-row{
+    display:inline-block;
+    float:left;
+    width:50%;
+}
+.node-content .field-type-taxonomy-term-reference{
+    height:20px;
+}
