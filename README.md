@@ -1,2 +1,0 @@
-# leoltraining
-Just a training
